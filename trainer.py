@@ -107,14 +107,11 @@ class Bert_choice(nn.Module):
         self._choice_split = '[SEP]'
 
     def forward(self, _inputs, labels):
-        #breakpoint()
-        #outputs = self._model(_inputs, labels=labels)
         outputs = self._model(_inputs, labels=labels)
         
         loss = outputs.loss
         classification_scores = outputs.logits
         _, _ids = torch.max(classification_scores, 1)
-        
         return loss.mean(), _ids
 
     def evaluation(self, _inputs, labels):
@@ -147,12 +144,13 @@ def evaluate(model, loader, args):
             answers = torch.tensor(answers).to(args.device)
 
             bs, cn, length = _inputs.size()
-            labels = torch.tensor([0 for _ in range(bs)]).to(args.device)
+            #labels = torch.tensor([0 for _ in range(bs)]).to(args.device)
             
             loss, _ids = model(_inputs, answers)
-            if args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel training
-            ccr = sum([1 if _id == 0 else 0 for _id in _ids]) / len(_ids)
+            #if args.n_gpu > 1:
+            #    loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            
+            ccr = sum([1 if _ids[i] == answers[i] else 0 for i in range(len(_ids))]) / len(_ids) 
 
             total_ccr += ccr
             total_loss += loss
@@ -200,15 +198,16 @@ def train(args):
             answers = torch.tensor(answers).to(args.device)
 
             bs, cn, length = _inputs.size()
-            labels = torch.tensor([0 for _ in range(bs)]).to(args.device) #PORQUE HACEN ESTO??
-            
+                        
             loss, _ids = model(_inputs, answers)
-            ccr = sum([1 if _id == 0 else 0 for _id in _ids]) / len(_ids)
+            #print(_ids, answers)
+            ccr = sum([1 if _ids[i] == answers[i] else 0 for i in range(len(_ids))]) / len(_ids) 
 
+               
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
-            if args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            #if args.n_gpu > 1:
+            #    loss = loss.mean()  # mean() to average on multi-gpu parallel training
 
             tr_loss += loss.item()
             tr_ccr += ccr / args.gradient_accumulation_steps
@@ -231,7 +230,7 @@ def train(args):
                 tb_writer.add_scalar('loss', (tr_loss - logging_loss), global_step)
                 tb_writer.add_scalar('ccr', global_ccr, global_step)
                 global_step += 1
-                print('loss: {:.4f} ccr {:.4f}\r'.format(tr_loss, ccr), end='')
+                #print('loss: {:.4f} ccr {:.4f}\r'.format(tr_loss, ccr), end='')
                 logging_loss = tr_loss
                 tr_ccr = 0
                 if global_step % args.ckpt == 0:
